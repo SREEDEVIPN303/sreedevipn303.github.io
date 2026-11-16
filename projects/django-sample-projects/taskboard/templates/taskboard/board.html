@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskBoard</title>
+<style>
+ body{font-family:system-ui,sans-serif;margin:0;background:#0b1020;color:#e8ecf8}
+ main{max-width:1000px;margin:0 auto;padding:24px}
+ form{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0}
+ input,select,button{padding:9px 12px;border-radius:8px;border:1px solid #242f55;background:#141c38;color:inherit;font:inherit}
+ input{flex:1;min-width:200px} button{cursor:pointer}
+ .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+ .col{background:#10172e;border:1px solid #242f55;border-radius:12px;padding:12px;min-height:200px}
+ .task{background:#141c38;border:1px solid #242f55;border-radius:10px;padding:10px;margin-top:10px}
+ .task small{color:#9aa6cc}.task div{display:flex;gap:6px;margin-top:8px}
+ @media(max-width:700px){.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<h1>TaskBoard</h1>
+<form id="f"><input id="t" placeholder="New task title" maxlength="120" required>
+<select id="p"><option>low</option><option selected>medium</option><option>high</option></select><button>Add</button></form>
+<div class="cols" id="cols"></div>
+<script>
+const ORDER = ['todo','doing','done'], LABEL = {todo:'To do', doing:'In progress', done:'Done'};
+const csrf = () => document.cookie.split('; ').find(c => c.startsWith('csrftoken='))?.split('=')[1];
+const api = (url, method='GET', body) => fetch(url, {method, headers:{'Content-Type':'application/json','X-CSRFToken':csrf()}, body: body && JSON.stringify(body)});
+
+async function load(){
+  const {tasks} = await (await api('api/tasks/')).json();
+  const cols = document.getElementById('cols'); cols.innerHTML = '';
+  ORDER.forEach((st, i) => {
+    const c = document.createElement('div'); c.className = 'col'; c.innerHTML = `<b>${LABEL[st]}</b>`;
+    tasks.filter(t => t.status === st).forEach(t => {
+      const d = document.createElement('div'); d.className = 'task';
+      d.innerHTML = `<span></span> <small>${t.priority}</small><div></div>`;
+      d.querySelector('span').textContent = t.title;
+      const box = d.querySelector('div');
+      const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; box.appendChild(b); };
+      if(i > 0) btn('←', async () => { await api(`api/tasks/${t.id}/`, 'PATCH', {status: ORDER[i-1]}); load(); });
+      if(i < 2) btn('→', async () => { await api(`api/tasks/${t.id}/`, 'PATCH', {status: ORDER[i+1]}); load(); });
+      btn('Delete', async () => { await api(`api/tasks/${t.id}/`, 'DELETE'); load(); });
+      c.appendChild(d);
+    });
+    cols.appendChild(c);
+  });
+}
+document.getElementById('f').onsubmit = async e => {
+  e.preventDefault();
+  await api('api/tasks/', 'POST', {title: t.value, priority: p.value}); t.value = ''; load();
+};
+load();
+</script>
+</main></body></html>
